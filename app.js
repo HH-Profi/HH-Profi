@@ -1,9 +1,17 @@
-const KEY = 'hh_profi_data_v1';
-const data = JSON.parse(localStorage.getItem(KEY) || '{"players":[],"exercises":[],"sessions":[],"attendance":[]}');
+const data = { players: [], exercises: [], sessions: [], attendance: [] };
 
 const el = (id) => document.getElementById(id);
-const save = () => localStorage.setItem(KEY, JSON.stringify(data));
 const uid = () => crypto.randomUUID();
+
+async function api(path, method = 'GET', body) {
+  const res = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.status === 204 ? null : res.json();
+}
 
 function calcPace(timeMin, distanceKm) {
   if (!timeMin || !distanceKm || distanceKm <= 0) return null;
@@ -67,11 +75,11 @@ function renderDashboard() {
   }
 }
 
-el('playerForm').addEventListener('submit', (e) => {
+el('playerForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
-  data.players.push({ id: uid(), name: f.get('name'), position: f.get('position'), jersey: f.get('jersey'), birthDate: f.get('birthDate'), contact: f.get('contact'), injuryHistory: f.get('injuryHistory') });
-  e.target.reset(); save(); renderAll();
+  await api('/api/players', 'POST', { id: uid(), name: f.get('name'), position: f.get('position'), jersey: f.get('jersey'), birthDate: f.get('birthDate'), contact: f.get('contact'), injuryHistory: f.get('injuryHistory') });
+  e.target.reset(); await reload();
 });
 
 el('exerciseForm').addEventListener('submit', async (e) => {
@@ -84,25 +92,25 @@ el('exerciseForm').addEventListener('submit', async (e) => {
     fileName = file.name;
     fileData = await file.arrayBuffer().then(buf => btoa(String.fromCharCode(...new Uint8Array(buf))));
   }
-  data.exercises.push({ id: uid(), title: f.get('title'), category: f.get('category'), playersNeeded: f.get('playersNeeded'), material: f.get('material'), description: f.get('description'), fileName, fileData });
-  e.target.reset(); save(); renderAll();
+  await api('/api/exercises', 'POST', { id: uid(), title: f.get('title'), category: f.get('category'), playersNeeded: f.get('playersNeeded'), material: f.get('material'), description: f.get('description'), fileName, fileData });
+  e.target.reset(); await reload();
 });
 
-el('sessionForm').addEventListener('submit', (e) => {
+el('sessionForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
   const selected = [...el('exerciseSelect').selectedOptions].map(o => o.value);
-  data.sessions.push({ id: uid(), date: f.get('date'), title: f.get('title'), notes: f.get('notes'), exerciseIds: selected });
-  e.target.reset(); save(); renderAll();
+  await api('/api/sessions', 'POST', { id: uid(), date: f.get('date'), title: f.get('title'), notes: f.get('notes'), exerciseIds: selected });
+  e.target.reset(); await reload();
 });
 
-el('attendanceForm').addEventListener('submit', (e) => {
+el('attendanceForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
   const distanceKm = parseFloat(f.get('distanceKm') || '0');
   const timeMin = parseFloat(f.get('timeMin') || '0');
-  data.attendance.push({ id: uid(), sessionId: el('sessionPicker').value, playerId: el('playerPicker').value, status: f.get('status'), distanceKm: distanceKm || null, timeMin: timeMin || null, pace: calcPace(timeMin, distanceKm) });
-  e.target.reset(); save(); renderAll();
+  await api('/api/attendance', 'POST', { id: uid(), sessionId: el('sessionPicker').value, playerId: el('playerPicker').value, status: f.get('status'), distanceKm: distanceKm || null, timeMin: timeMin || null, pace: calcPace(timeMin, distanceKm) });
+  e.target.reset(); await reload();
 });
 
 ['distanceKm','timeMin'].forEach((name) => {
@@ -114,4 +122,14 @@ el('attendanceForm').addEventListener('submit', (e) => {
 });
 
 function renderAll() { renderPlayers(); renderExercises(); renderSessions(); renderAttendance(); renderDashboard(); }
-renderAll();
+
+async function reload() {
+  const fresh = await api('/api/bootstrap');
+  data.players = fresh.players;
+  data.exercises = fresh.exercises;
+  data.sessions = fresh.sessions;
+  data.attendance = fresh.attendance;
+  renderAll();
+}
+
+reload();
