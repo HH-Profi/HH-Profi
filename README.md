@@ -17,3 +17,12 @@ Dann im Browser öffnen: `http://localhost:8080`
   - `POST /api/exercises`
   - `POST /api/sessions`
   - `POST /api/attendance`
+
+  - `PUT /api/players/{id}`
+  - `PUT /api/exercises/{id}`
+  - `PUT /api/sessions/{id}`
+  - `PUT /api/attendance/{id}`
+  - `DELETE /api/players/{id}`
+  - `DELETE /api/exercises/{id}`
+  - `DELETE /api/sessions/{id}`
+  - `DELETE /api/attendance/{id}`

@@ -7,91 +7,86 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Handball Trainingsplaner</h1>
-    <p>Spieler, Training, Übungen und Kalender an einem Ort.</p>
+  <header class="topbar">
+    <div>
+      <h1>🏐 Handball Trainingsplaner</h1>
+      <p>Spieler, Einheiten, Übungen und Verfügbarkeiten zentral verwalten.</p>
+    </div>
+    <span class="pill">SQLite aktiv</span>
   </header>
 
   <main>
     <section class="card" id="dashboard">
       <h2>Dashboard</h2>
-      <div class="grid stats">
-        <div><strong>Nächstes Training:</strong> <span id="nextTraining">-</span></div>
-        <div><strong>Verletzt/Krank:</strong> <span id="healthSummary">-</span></div>
-        <div><strong>Ø Anwesenheitsrate:</strong> <span id="attendanceAvg">-</span></div>
+      <div class="stats">
+        <div class="stat"><span>Nächstes Training</span><strong id="nextTraining">-</strong></div>
+        <div class="stat"><span>Verletzt/Krank</span><strong id="healthSummary">-</strong></div>
+        <div class="stat"><span>Ø Anwesenheit</span><strong id="attendanceAvg">-</strong></div>
       </div>
     </section>
 
     <section class="card">
       <h2>Spielerverwaltung</h2>
-      <form id="playerForm" class="grid form-grid">
+      <form id="playerForm" class="form-grid">
+        <input type="hidden" name="id" />
         <input required name="name" placeholder="Name" />
         <input name="position" placeholder="Position" />
         <input name="jersey" placeholder="Trikotnummer" type="number" />
         <input name="birthDate" type="date" />
         <input name="contact" placeholder="Kontakt" />
         <textarea name="injuryHistory" placeholder="Verletzungshistorie"></textarea>
-        <button type="submit">Spieler speichern</button>
+        <div class="row-actions">
+          <button type="submit">Speichern</button>
+          <button type="button" class="ghost" id="cancelPlayerEdit">Abbrechen</button>
+        </div>
       </form>
-      <table>
-        <thead><tr><th>Name</th><th>Position</th><th>Nr.</th><th>Status</th><th>Anwesenheit</th></tr></thead>
-        <tbody id="playersTable"></tbody>
-      </table>
+      <table><thead><tr><th>Name</th><th>Pos.</th><th>Nr.</th><th>Status</th><th>Anwesenheit</th><th>Aktionen</th></tr></thead><tbody id="playersTable"></tbody></table>
     </section>
 
     <section class="card">
       <h2>Übungsbibliothek</h2>
-      <form id="exerciseForm" class="grid form-grid">
+      <form id="exerciseForm" class="form-grid">
+        <input type="hidden" name="id" />
         <input required name="title" placeholder="Übungsname" />
         <input name="category" placeholder="Kategorie" />
         <input name="playersNeeded" type="number" min="1" placeholder="Spieleranzahl" />
         <input name="material" placeholder="Material" />
         <textarea required name="description" placeholder="Erklärung / Ablauf"></textarea>
         <input name="file" type="file" accept="image/*,.pdf,.doc,.docx" />
-        <button type="submit">Übung speichern</button>
+        <div class="row-actions"><button type="submit">Speichern</button><button type="button" class="ghost" id="cancelExerciseEdit">Abbrechen</button></div>
       </form>
       <ul id="exerciseList" class="list"></ul>
     </section>
 
     <section class="card">
-      <h2>Kalender & Training planen</h2>
-      <form id="sessionForm" class="grid form-grid">
+      <h2>Kalender & Training</h2>
+      <form id="sessionForm" class="form-grid">
+        <input type="hidden" name="id" />
         <input required type="date" name="date" />
         <input required name="title" placeholder="Einheitstitel" />
         <textarea name="notes" placeholder="Notizen"></textarea>
         <label>Übungen zuweisen</label>
         <select name="exerciseIds" id="exerciseSelect" multiple></select>
-        <button type="submit">Trainingseinheit speichern</button>
+        <div class="row-actions"><button type="submit">Speichern</button><button type="button" class="ghost" id="cancelSessionEdit">Abbrechen</button></div>
       </form>
       <ul id="sessionList" class="list"></ul>
     </section>
 
     <section class="card">
       <h2>Training erfassen</h2>
-      <form id="attendanceForm" class="grid form-grid">
-        <label>Trainingseinheit</label>
-        <select id="sessionPicker" required></select>
-        <label>Spieler</label>
-        <select id="playerPicker" required></select>
-        <select name="status">
-          <option value="gesund">gesund</option>
-          <option value="krank">krank</option>
-          <option value="verletzt">verletzt</option>
-          <option value="anwesend">anwesend</option>
-          <option value="abwesend">abwesend</option>
-        </select>
+      <form id="attendanceForm" class="form-grid">
+        <input type="hidden" name="id" />
+        <label>Trainingseinheit</label><select id="sessionPicker" required></select>
+        <label>Spieler</label><select id="playerPicker" required></select>
+        <select name="status"><option value="gesund">gesund</option><option value="krank">krank</option><option value="verletzt">verletzt</option><option value="anwesend">anwesend</option><option value="abwesend">abwesend</option></select>
         <input name="distanceKm" type="number" step="0.01" min="0" placeholder="Strecke (km)" />
         <input name="timeMin" type="number" step="0.1" min="0" placeholder="Zeit (min)" />
         <output id="paceOutput">Pace: -</output>
-        <button type="submit">Eintrag speichern</button>
+        <div class="row-actions"><button type="submit">Speichern</button><button type="button" class="ghost" id="cancelAttendanceEdit">Abbrechen</button></div>
       </form>
-      <table>
-        <thead><tr><th>Datum</th><th>Spieler</th><th>Status</th><th>Zeit</th><th>Strecke</th><th>Pace</th></tr></thead>
-        <tbody id="attendanceTable"></tbody>
-      </table>
+      <table><thead><tr><th>Datum</th><th>Spieler</th><th>Status</th><th>Zeit</th><th>Strecke</th><th>Pace</th><th>Aktionen</th></tr></thead><tbody id="attendanceTable"></tbody></table>
     </section>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>

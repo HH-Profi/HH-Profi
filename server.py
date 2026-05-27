@@ -77,6 +77,12 @@ def rows(conn, query, params=()):
 
 
 class Handler(SimpleHTTPRequestHandler):
+
+    def _id_from_path(self, prefix):
+        if self.path.startswith(prefix + '/'):
+            return self.path[len(prefix) + 1:]
+        return None
+
     def _json(self, status, payload):
         body = json.dumps(payload).encode('utf-8')
         self.send_response(status)
@@ -147,6 +153,45 @@ class Handler(SimpleHTTPRequestHandler):
 
         return self._json(404, {'error': 'Not found'})
 
+
+    def do_PUT(self):
+        parsed = urlparse(self.path)
+        length = int(self.headers.get('Content-Length', '0'))
+        payload = json.loads(self.rfile.read(length) if length else b'{}')
+        with get_conn() as conn:
+            if parsed.path.startswith('/api/players/'):
+                conn.execute('UPDATE players SET name=?,position=?,jersey=?,birth_date=?,contact=?,injury_history=? WHERE id=?', (payload['name'], payload.get('position'), payload.get('jersey'), payload.get('birthDate'), payload.get('contact'), payload.get('injuryHistory'), payload['id']))
+                return self._json(200, {'ok': True})
+            if parsed.path.startswith('/api/exercises/'):
+                conn.execute('UPDATE exercises SET title=?,category=?,players_needed=?,material=?,description=?,file_name=COALESCE(NULLIF(?,''),file_name),file_data=COALESCE(NULLIF(?,''),file_data) WHERE id=?', (payload['title'], payload.get('category'), payload.get('playersNeeded'), payload.get('material'), payload['description'], payload.get('fileName',''), payload.get('fileData',''), payload['id']))
+                return self._json(200, {'ok': True})
+            if parsed.path.startswith('/api/sessions/'):
+                conn.execute('UPDATE sessions SET date=?,title=?,notes=? WHERE id=?', (payload['date'], payload['title'], payload.get('notes'), payload['id']))
+                conn.execute('DELETE FROM session_exercises WHERE session_id=?', (payload['id'],))
+                for ex_id in payload.get('exerciseIds', []):
+                    conn.execute('INSERT INTO session_exercises (session_id,exercise_id) VALUES (?,?)', (payload['id'], ex_id))
+                return self._json(200, {'ok': True})
+            if parsed.path.startswith('/api/attendance/'):
+                conn.execute('UPDATE attendance SET session_id=?,player_id=?,status=?,distance_km=?,time_min=?,pace=? WHERE id=?', (payload['sessionId'], payload['playerId'], payload['status'], payload.get('distanceKm'), payload.get('timeMin'), payload.get('pace'), payload['id']))
+                return self._json(200, {'ok': True})
+        return self._json(404, {'error': 'Not found'})
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        with get_conn() as conn:
+            if parsed.path.startswith('/api/players/'):
+                conn.execute('DELETE FROM players WHERE id=?', (parsed.path.split('/')[-1],))
+                return self._json(200, {'ok': True})
+            if parsed.path.startswith('/api/exercises/'):
+                conn.execute('DELETE FROM exercises WHERE id=?', (parsed.path.split('/')[-1],))
+                return self._json(200, {'ok': True})
+            if parsed.path.startswith('/api/sessions/'):
+                conn.execute('DELETE FROM sessions WHERE id=?', (parsed.path.split('/')[-1],))
+                return self._json(200, {'ok': True})
+            if parsed.path.startswith('/api/attendance/'):
+                conn.execute('DELETE FROM attendance WHERE id=?', (parsed.path.split('/')[-1],))
+                return self._json(200, {'ok': True})
+        return self._json(404, {'error': 'Not found'})
 
 if __name__ == '__main__':
     init_db()
