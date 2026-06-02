@@ -27,6 +27,10 @@ const upload = multer({
   }),
   limits: { fileSize: 20 * 1024 * 1024 }
 });
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
@@ -91,6 +95,64 @@ const jsonArray = (value) => {
   if (Array.isArray(value)) return value;
   try { return JSON.parse(value || '[]'); } catch { return []; }
 };
+
+const splitList = (value) => String(value || '').split(/[;,|]/).map((item) => item.trim()).filter(Boolean);
+const normalize = (value) => String(value || '').trim().toLowerCase();
+const firstValue = (row, keys) => {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== '') return row[key];
+  }
+  return '';
+};
+
+function parseCsv(text) {
+  const firstLine = text.split(/\r?\n/).find((line) => line.trim()) || '';
+  const delimiter = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ';' : ',';
+  const rows = [];
+  let row = [], field = '', quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i], next = text[i + 1];
+    if (ch === '"') {
+      if (quoted && next === '"') { field += '"'; i += 1; } else quoted = !quoted;
+    } else if (ch === delimiter && !quoted) {
+      row.push(field); field = '';
+    } else if ((ch === '\n' || ch === '\r') && !quoted) {
+      if (ch === '\r' && next === '\n') i += 1;
+      row.push(field); field = '';
+      if (row.some((cell) => cell.trim() !== '')) rows.push(row);
+      row = [];
+    } else field += ch;
+  }
+  row.push(field);
+  if (row.some((cell) => cell.trim() !== '')) rows.push(row);
+  if (rows.length === 0) return [];
+  const headers = rows.shift().map((header) => normalize(header));
+  return rows.map((cells) => Object.fromEntries(headers.map((header, index) => [header, String(cells[index] || '').trim()])));
+}
+
+function parseImportRows(req) {
+  if (!req.file) throw new Error('CSV-Datei fehlt');
+  const name = req.file.originalname.toLowerCase();
+  if (!name.endsWith('.csv')) throw new Error('Bitte eine CSV-Datei hochladen');
+  const rows = parseCsv(req.file.buffer.toString('utf8').replace(/^\uFEFF/, ''));
+  if (rows.length === 0) throw new Error('CSV enthält keine Daten');
+  return rows;
+}
+
+function findPlayerId(value) {
+  const wanted = normalize(value);
+  if (!wanted) return null;
+  const players = db.prepare('SELECT id,name,number FROM players').all();
+  const found = players.find((player) => normalize(player.id) === wanted || normalize(player.number) === wanted || normalize(player.name) === wanted || normalize(`#${player.number} ${player.name}`) === wanted);
+  return found?.id || null;
+}
+
+function findExerciseId(value) {
+  const wanted = normalize(value);
+  if (!wanted) return null;
+  const exercise = db.prepare('SELECT id,name FROM exercises').all().find((item) => normalize(item.id) === wanted || normalize(item.name) === wanted);
+  return exercise?.id || null;
+}
 
 function parseExercise(row) {
   if (!row) return null;
@@ -177,6 +239,94 @@ app.post('/api/players/:id/performance', (req, res) => {
 app.delete('/api/performance/:id', (req, res) => {
   db.prepare('DELETE FROM player_performance WHERE id=?').run(req.params.id);
   res.json({ ok: true });
+});
+
+
+app.post('/api/import/players', importUpload.single('file'), (req, res) => {
+  try {
+    const rows = parseImportRows(req);
+    let created = 0, updated = 0, skipped = 0;
+    const findExisting = db.prepare('SELECT id FROM players WHERE number=? OR lower(name)=lower(?) LIMIT 1');
+    const insert = db.prepare('INSERT INTO players (id,name,number,position,birthdate,contact,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)');
+    const update = db.prepare('UPDATE players SET name=?,number=?,position=?,birthdate=?,contact=?,status=?,notes=?,updated_at=? WHERE id=?');
+    db.transaction(() => rows.forEach((row) => {
+      const name = firstValue(row, ['name', 'spieler', 'spielername', 'vorname nachname']).trim();
+      if (!name) { skipped += 1; return; }
+      const number = firstValue(row, ['number', 'nummer', 'trikotnummer']);
+      const data = {
+        number: number || null,
+        position: firstValue(row, ['position', 'pos']) || null,
+        birthdate: firstValue(row, ['birthdate', 'geburtsdatum', 'geburtstag']) || null,
+        contact: firstValue(row, ['contact', 'kontakt', 'email', 'telefon']) || null,
+        status: firstValue(row, ['status']) || 'fit',
+        notes: firstValue(row, ['notes', 'notizen', 'notiz']) || null
+      };
+      const existing = findExisting.get(data.number, name);
+      if (existing) {
+        update.run(name, data.number, data.position, data.birthdate, data.contact, data.status, data.notes, now(), existing.id);
+        updated += 1;
+      } else {
+        insert.run(uid(), name, data.number, data.position, data.birthdate, data.contact, data.status, data.notes, now(), now());
+        created += 1;
+      }
+    }))();
+    res.json({ ok: true, created, updated, skipped });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/import/exercises', importUpload.single('file'), (req, res) => {
+  try {
+    const rows = parseImportRows(req);
+    let created = 0, updated = 0, skipped = 0;
+    const findExisting = db.prepare('SELECT id FROM exercises WHERE lower(name)=lower(?) LIMIT 1');
+    const insert = db.prepare('INSERT INTO exercises (id,name,category,description,players_count,duration,material,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)');
+    const update = db.prepare('UPDATE exercises SET category=?,description=?,players_count=?,duration=?,material=?,updated_at=? WHERE id=?');
+    db.transaction(() => rows.forEach((row) => {
+      const name = firstValue(row, ['name', 'übung', 'uebung', 'exercise']).trim();
+      if (!name) { skipped += 1; return; }
+      const material = splitList(firstValue(row, ['material', 'materials', 'geräte', 'geraete']));
+      const category = firstValue(row, ['category', 'kategorie']) || null;
+      const description = firstValue(row, ['description', 'beschreibung', 'ablauf']) || null;
+      const playersCount = firstValue(row, ['players_count', 'spieleranzahl', 'spieler']) || null;
+      const duration = parseInt(firstValue(row, ['duration', 'dauer', 'minuten']), 10) || 15;
+      const existing = findExisting.get(name);
+      if (existing) {
+        update.run(category, description, playersCount, duration, JSON.stringify(material), now(), existing.id);
+        updated += 1;
+      } else {
+        insert.run(uid(), name, category, description, playersCount, duration, JSON.stringify(material), now(), now());
+        created += 1;
+      }
+    }))();
+    res.json({ ok: true, created, updated, skipped });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/import/sessions', importUpload.single('file'), (req, res) => {
+  try {
+    const rows = parseImportRows(req);
+    let created = 0, skipped = 0;
+    db.transaction(() => rows.forEach((row) => {
+      const date = firstValue(row, ['date', 'datum']).trim();
+      if (!date) { skipped += 1; return; }
+      const id = uid();
+      db.prepare('INSERT INTO sessions (id,title,date,time,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?)')
+        .run(id, firstValue(row, ['title', 'titel', 'training']) || 'Training', date, firstValue(row, ['time', 'uhrzeit', 'zeit']) || null, firstValue(row, ['notes', 'notizen', 'notiz']) || null, now(), now());
+      const present = splitList(firstValue(row, ['present', 'anwesend', 'spieler_anwesend'])).map(findPlayerId).filter(Boolean);
+      const absent = splitList(firstValue(row, ['absent', 'abwesend', 'spieler_abwesend'])).map(findPlayerId).filter(Boolean);
+      const exercises = splitList(firstValue(row, ['exercises', 'übungen', 'uebungen'])).map(findExerciseId).filter(Boolean);
+      saveAttendance(id, present, absent);
+      saveSessionExercises(id, exercises);
+      created += 1;
+    }))();
+    res.json({ ok: true, created, updated: 0, skipped });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 app.get('/api/exercises', (req, res) => {

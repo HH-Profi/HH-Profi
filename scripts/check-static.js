@@ -10,7 +10,10 @@ for (const needle of [
   'function saveSession',
   'function addPerformance',
   "'/players/'+id+'/performance'",
-  'Tore pro Spiel'
+  'Tore pro Spiel',
+  'function openImport',
+  "POST('/import/'+type",
+  'CSV Import'
 ]) {
   if (!html.includes(needle)) throw new Error(`Missing expected UI code: ${needle}`);
 }

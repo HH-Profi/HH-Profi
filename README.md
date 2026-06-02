@@ -39,6 +39,38 @@ Im Spielerprofil kannst du pro Spieler einzelne Leistungsdaten erfassen:
 
 Diese Werte werden in der SQLite-Tabelle `player_performance` gespeichert und in den Statistiken für Laufleistung und Tore ausgewertet.
 
+
+## CSV-Import
+
+Du kannst Daten direkt in der Weboberfläche per CSV importieren. Excel-Dateien bitte vorher in Excel oder LibreOffice als CSV speichern.
+
+### Spieler importieren
+
+Pflichtfeld ist `name`. Unterstützte Spalten:
+
+```csv
+name,number,position,birthdate,contact,status,notes
+Max Mustermann,7,Rückraum Mitte,2001-04-12,max@example.com,fit,Linkshänder
+```
+
+### Übungen importieren
+
+Pflichtfeld ist `name`. Unterstützte Spalten:
+
+```csv
+name,category,description,players_count,duration,material
+Stoßen und Kreuzen,Taktik,Ablaufbeschreibung,6-10,20,Bälle|Hütchen
+```
+
+### Trainings importieren
+
+Pflichtfeld ist `date`. Spieler und Übungen kannst du per Nummer, Name oder ID referenzieren; mehrere Werte trennst du mit `|`.
+
+```csv
+title,date,time,notes,present,absent,exercises
+Dienstagstraining,2026-06-02,18:00,Schwerpunkt Angriff,7|Max Mustermann,12,Stoßen und Kreuzen
+```
+
 ## Verwaltung
 
 ```bash
