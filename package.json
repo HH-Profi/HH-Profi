@@ -1,0 +1,16 @@
+{
+  "name": "handball-trainer",
+  "version": "1.0.1",
+  "description": "Handball Training Management",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --check server/index.js && node scripts/check-static.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {}
+}
